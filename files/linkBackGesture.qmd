@@ -1,0 +1,7 @@
+; Martin
+; SPDX-License-Identifier: MIT
+;
+; Intentionally kept as a no-op placeholder.
+; The visible floating back chip in betterToc.qmd supersedes the old
+; hidden corner-tap return gesture, which proved conflict-prone when
+; multiple QMD patches touched SceneViewGestures.qml.

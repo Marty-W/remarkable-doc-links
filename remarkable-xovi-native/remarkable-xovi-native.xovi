@@ -1,0 +1,85 @@
+version 0.1.0
+
+export desktopClipboardPing
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardPing"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardReadStaged
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardReadStaged"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardDumpUi
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardDumpUi"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardInsertStaged
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardInsertStaged"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardDumpGlobals
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardDumpGlobals"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardInspectContext
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardInspectContext"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardLoadStagedImageClipboard
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardLoadStagedImageClipboard"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardInsertStagedImage
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardInsertStagedImage"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardProbeTypes
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardProbeTypes"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardProbeClipboardBridge
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardProbeClipboardBridge"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardProbeFactories
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardProbeFactories"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardProbeRecognizerJob
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardProbeRecognizerJob"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardInspectObject
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardInspectObject"
+    xovi-message-broker$version = 1
+end
+
+export desktopClipboardCreateLinkedNotebook
+with
+    xovi-message-broker$simpleSignal = "desktopClipboardCreateLinkedNotebook"
+    xovi-message-broker$version = 1
+end
