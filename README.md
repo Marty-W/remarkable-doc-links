@@ -40,6 +40,8 @@ Tested primarily on:
 
 This repo includes a **tablet-side native plugin**. The bundled prebuilt binary is currently for **Paper Pro / aarch64**.
 
+For **Create linked note**, the QMD flow now prefers [`rm-librarian`](https://github.com/rmitchellscott/rm-librarian) when that XOVI extension is present, and falls back to the bundled native plugin otherwise. That opens the door to broader device coverage where `rm-librarian` already has builds.
+
 ## Important dependency / conflict note
 
 This package includes a **modified fork of `betterToc.qmd`**.
@@ -97,7 +99,7 @@ The installer will:
 1. verify that XOVI exists on the tablet
 2. back up any existing conflicting files
 3. install the bundled QMD patches
-4. install the tablet-side native plugin
+4. install the tablet-side native plugin (still used as fallback / for native debug helpers)
 5. download/install `xovi-message-broker.so` unless `--skip-broker` is used
 6. remove any legacy `desktop-clipboard-native.so` copy to avoid duplicate loading
 7. restart XOVI via `/home/root/xovi/start`

@@ -164,8 +164,17 @@ AFFECT [[1224665461898798997]]
             property var currentPageLinkMarkers: []
             property string tocSidebarMode: "toc"
             property bool _creatingLinkedNotebook: false
+            property var _pendingLinkedNotebookCreate: null
             readonly property string lastDocPreviousDocId: Values.martinLastDocSettings.previousDocId || ""
             readonly property bool lastDocAvailable: !!lastDocPreviousDocId && lastDocPreviousDocId !== (document ? (document.id || "") : "")
+
+            Timer {
+                id: linkedNoteCreatePollTimer
+                interval: 150
+                repeat: true
+                running: false
+                onTriggered: linkedNotePollPendingCreate()
+            }
 
             function tocSetSidebarMessage(messageText, onClick) {
                 ~&6504254477&~.~&16299287846731412336&~ = messageText ? {
@@ -186,6 +195,190 @@ AFFECT [[1224665461898798997]]
                 } else {
                     tocSetSidebarMessage("", ~&6504117156&~);
                 }
+            }
+
+            function linkedNoteMetadataPath(docId) {
+                return "file:///home/root/.local/share/remarkable/xochitl/" + docId + ".metadata";
+            }
+
+            function linkedNoteContentPath(docId) {
+                return "file:///home/root/.local/share/remarkable/xochitl/" + docId + ".content";
+            }
+
+            function linkedNoteReadJsonObject(path) {
+                var req = new XMLHttpRequest();
+                try {
+                    req.open("GET", path, false);
+                    req.send();
+                } catch (error) {
+                    console.log("doc-links linkedNoteReadJsonObject error", "path=" + path, String(error));
+                    return null;
+                }
+
+                var rawText = req.responseText || "";
+                var jsonStart = rawText.indexOf("{");
+                if (jsonStart < 0) {
+                    return null;
+                }
+
+                try {
+                    return JSON.parse(rawText.slice(jsonStart));
+                } catch (error) {
+                    console.log("doc-links linkedNoteReadJsonObject parse-error", "path=" + path, String(error));
+                    return null;
+                }
+            }
+
+            function linkedNoteReadParentId(docId) {
+                var metadata = linkedNoteReadJsonObject(linkedNoteMetadataPath(docId));
+                return metadata && metadata.parent ? String(metadata.parent) : "";
+            }
+
+            function linkedNoteReadFirstPageId(docId) {
+                var content = linkedNoteReadJsonObject(linkedNoteContentPath(docId));
+                var pages = content && content.cPages && content.cPages.pages ? content.cPages.pages : [];
+                if (!pages || pages.length === 0 || !pages[0] || !pages[0].id) {
+                    return "";
+                }
+                return String(pages[0].id);
+            }
+
+            function linkedNoteLooksLikeUuid(value) {
+                return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+            }
+
+            function linkedNoteCreateTempTitle(baseTitle) {
+                var suffix = Date.now().toString(36) + "-" + Math.floor(Math.random() * 1679616).toString(36);
+                return (baseTitle || "Linked note") + " · doclinks-" + suffix;
+            }
+
+            function linkedNoteFinishPendingCreate() {
+                _pendingLinkedNotebookCreate = null;
+                linkedNoteCreatePollTimer.stop();
+                _creatingLinkedNotebook = false;
+            }
+
+            function linkedNoteFinalizeCreatedNotebook(state, targetDocId, targetPageKey) {
+                var finalTitle = state.finalTitle || "Linked note";
+                var currentDocId = document ? (document.id || "") : "";
+                if (state.sourceDocId && currentDocId && state.sourceDocId !== currentDocId) {
+                    console.log("doc-links createLinkedNotebook source-not-restored",
+                        "sourceDocId=" + state.sourceDocId,
+                        "currentDocId=" + currentDocId);
+                    linkedNoteFinishPendingCreate();
+                    return;
+                }
+
+                var pendingEntry = {
+                    targetDocId: targetDocId,
+                    targetPageKey: targetPageKey,
+                    targetDocName: finalTitle,
+                    sourcePage: state.sourcePage,
+                    sourcePageId: state.sourcePageId,
+                    sourceAnchor: state.sourceAnchor
+                };
+                var xrefKey = tocAddCrossDocEntry(
+                    finalTitle,
+                    targetDocId,
+                    targetPageKey,
+                    finalTitle,
+                    state.sourcePage
+                );
+                linkAddEntryFromPending(pendingEntry, xrefKey);
+                linkedNoteFinishPendingCreate();
+                tocNavigateToCrossDoc(xrefKey, targetDocId, targetPageKey);
+            }
+
+            function linkedNoteFailPendingCreate(reason, detail) {
+                console.log("doc-links createLinkedNotebook librarian-failed",
+                    "reason=" + (reason || ""),
+                    detail ? String(detail) : "");
+                linkedNoteFinishPendingCreate();
+            }
+
+            function linkedNotePollPendingCreate() {
+                var state = _pendingLinkedNotebookCreate;
+                if (!state) {
+                    linkedNoteCreatePollTimer.stop();
+                    _creatingLinkedNotebook = false;
+                    return;
+                }
+
+                if (!state.targetDocId) {
+                    state.lookupAttempts = Number(state.lookupAttempts || 0) + 1;
+                    var lookupReply = linkedNoteBroker.sendSimpleSignal("lookupEntry", state.tempTitle);
+                    console.log("doc-links createLinkedNotebook lookup",
+                        "attempt=" + state.lookupAttempts,
+                        "reply=" + (lookupReply || ""));
+                    if (lookupReply && String(lookupReply).indexOf("ERROR:") !== 0) {
+                        var matches = String(lookupReply).split(/\s+/).filter(function (value) {
+                            return linkedNoteLooksLikeUuid(value);
+                        });
+                        if (matches.length === 1) {
+                            state.targetDocId = matches[0];
+                            if (state.finalTitle !== state.tempTitle) {
+                                var renameReply = linkedNoteBroker.sendSimpleSignal("renameEntry", state.targetDocId + "," + state.finalTitle);
+                                console.log("doc-links createLinkedNotebook rename",
+                                    "targetDocId=" + state.targetDocId,
+                                    "reply=" + (renameReply || ""));
+                            }
+                        } else if (matches.length > 1) {
+                            linkedNoteFailPendingCreate("ambiguous-lookup", lookupReply);
+                            return;
+                        }
+                    }
+
+                    if (!state.targetDocId) {
+                        if (state.lookupAttempts >= 40) {
+                            linkedNoteFailPendingCreate("lookup-timeout", lookupReply || "");
+                            return;
+                        }
+                        _pendingLinkedNotebookCreate = state;
+                        return;
+                    }
+                }
+
+                state.pageAttempts = Number(state.pageAttempts || 0) + 1;
+                var targetPageKey = linkedNoteReadFirstPageId(state.targetDocId);
+                if (!targetPageKey) {
+                    if (state.pageAttempts >= 40) {
+                        linkedNoteFailPendingCreate("page-timeout", state.targetDocId);
+                        return;
+                    }
+                    _pendingLinkedNotebookCreate = state;
+                    return;
+                }
+
+                linkedNoteFinalizeCreatedNotebook(state, state.targetDocId, targetPageKey);
+            }
+
+            function linkedNoteTryCreateViaLibrarian(state) {
+                var parentId = linkedNoteReadParentId(state.sourceDocId);
+                var tempTitle = linkedNoteCreateTempTitle(state.finalTitle || "Linked note");
+                var createParams = tempTitle;
+                if (parentId) {
+                    createParams += "," + parentId;
+                }
+
+                var createReply = linkedNoteBroker.sendSimpleSignal("createNotebook", createParams);
+                console.log("doc-links createLinkedNotebook librarian-create",
+                    "reply=" + (createReply || ""),
+                    "parentId=" + parentId,
+                    "tempTitle=" + tempTitle);
+
+                if (!createReply || String(createReply).trim() !== "ok") {
+                    return false;
+                }
+
+                state.parentId = parentId;
+                state.tempTitle = tempTitle;
+                state.lookupAttempts = 0;
+                state.pageAttempts = 0;
+                state.targetDocId = "";
+                _pendingLinkedNotebookCreate = state;
+                _creatingLinkedNotebook = true;
+                linkedNoteCreatePollTimer.start();
+                return true;
             }
 
             function lastDocBuildSidebarEntry() {
@@ -1318,15 +1511,23 @@ AFFECT [[1224665461898798997]]
                     return;
                 }
 
-                var normalizedSourceAnchor = linkNormalizeAnchor(sourceAnchor);
-                var sourceDocId = document.id || "";
-                var sourcePage = currentPage;
-                var sourcePageId = currentPageId || (document ? document.idForPage(currentPage) : "");
+                var createState = {
+                    finalTitle: "Linked note",
+                    sourceDocId: document.id || "",
+                    sourcePage: currentPage,
+                    sourcePageId: currentPageId || (document ? document.idForPage(currentPage) : ""),
+                    sourceAnchor: linkNormalizeAnchor(sourceAnchor)
+                };
+
+                if (linkedNoteTryCreateViaLibrarian(createState)) {
+                    return;
+                }
+
                 _creatingLinkedNotebook = true;
 
                 try {
-                    var replyText = linkedNoteBroker.sendSimpleSignal("desktopClipboardCreateLinkedNotebook", "Linked note");
-                    console.log("doc-links createLinkedNotebook reply", replyText || "");
+                    var replyText = linkedNoteBroker.sendSimpleSignal("desktopClipboardCreateLinkedNotebook", createState.finalTitle);
+                    console.log("doc-links createLinkedNotebook native-reply", replyText || "");
                     if (!replyText || String(replyText).indexOf("ERROR:") === 0) {
                         return;
                     }
@@ -1346,32 +1547,16 @@ AFFECT [[1224665461898798997]]
 
                     var currentDocId = document ? (document.id || "") : "";
                     if ((reply.currentDocId && currentDocId && reply.currentDocId !== currentDocId)
-                            || (sourceDocId && currentDocId && sourceDocId !== currentDocId)) {
+                            || (createState.sourceDocId && currentDocId && createState.sourceDocId !== currentDocId)) {
                         console.log("doc-links createLinkedNotebook source-not-restored",
-                            "sourceDocId=" + sourceDocId,
+                            "sourceDocId=" + createState.sourceDocId,
                             "currentDocId=" + currentDocId,
                             "replyCurrentDocId=" + (reply.currentDocId || ""));
                         return;
                     }
 
-                    var targetDocName = reply.targetDocName || "Linked note";
-                    var pendingEntry = {
-                        targetDocId: reply.targetDocId,
-                        targetPageKey: reply.targetPageKey,
-                        targetDocName: targetDocName,
-                        sourcePage: sourcePage,
-                        sourcePageId: sourcePageId,
-                        sourceAnchor: normalizedSourceAnchor
-                    };
-                    var xrefKey = tocAddCrossDocEntry(
-                        targetDocName,
-                        reply.targetDocId,
-                        reply.targetPageKey,
-                        targetDocName,
-                        sourcePage
-                    );
-                    linkAddEntryFromPending(pendingEntry, xrefKey);
-                    tocNavigateToCrossDoc(xrefKey, reply.targetDocId, reply.targetPageKey);
+                    createState.finalTitle = reply.targetDocName || createState.finalTitle;
+                    linkedNoteFinalizeCreatedNotebook(createState, reply.targetDocId, reply.targetPageKey);
                 } finally {
                     _creatingLinkedNotebook = false;
                 }

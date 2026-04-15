@@ -10,7 +10,7 @@ Right now this plugin is mainly used to:
 
 - inspect live xochitl/QML object trees from native code during development
 - expose helper functions over `xovi-message-broker`
-- create a new linked notebook directly for the **Create linked note** flow
+- provide a fallback linked-notebook creation path when `rm-librarian` is not present
 
 ## Compatibility
 
