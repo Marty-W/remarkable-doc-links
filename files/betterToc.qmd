@@ -3082,6 +3082,72 @@ INSERT {
             property var marker: modelData
             property string anchorSpace: marker && marker.anchorSpace === "page" ? "page" : "view"
             readonly property bool baseMarkerVisible: !!marker && !!marker.targetDocId && !!marker.targetPageKey && !~&254540341572282132&~.crossDocTocSelection
+
+            function isFiniteRect(rect) {
+                return !!rect
+                    && isFinite(rect.x)
+                    && isFinite(rect.y)
+                    && isFinite(rect.width)
+                    && isFinite(rect.height)
+                    && rect.width > 0
+                    && rect.height > 0;
+            }
+
+            function markerDocumentHostReadyState() {
+                var item = parent;
+                while (item) {
+                    var loaded = undefined;
+                    var notePage = undefined;
+                    try {
+                        loaded = item["documentLoaded"];
+                    } catch (error) {
+                    }
+                    try {
+                        notePage = item["notePage"];
+                    } catch (error) {
+                    }
+                    if (loaded !== undefined || notePage !== undefined) {
+                        return {
+                            known: true,
+                            ready: (loaded === undefined || !!loaded) && (notePage === undefined || !!notePage)
+                        };
+                    }
+                    item = item.parent;
+                }
+                return {
+                    known: false,
+                    ready: false
+                };
+            }
+
+            function markerPageBounds() {
+                if (anchorSpace !== "page" || !parent || !parent.controller || !parent.sceneToView) {
+                    return null;
+                }
+
+                var hostReadyState = markerDocumentHostReadyState();
+                if (hostReadyState.known && !hostReadyState.ready) {
+                    return null;
+                }
+
+                if (isFiniteRect(parent.controller.paperNoteBounds)) {
+                    return parent.controller.paperNoteBounds;
+                }
+
+                if (hostReadyState.known && hostReadyState.ready && isFiniteRect(parent.controller.boundingRect)) {
+                    return parent.controller.boundingRect;
+                }
+
+                return null;
+            }
+
+            readonly property bool markerPageTransformReady: {
+                var viewportRevision = parent ? parent.linkMarkerViewportRevision : 0;
+                if (anchorSpace !== "page") {
+                    return true;
+                }
+                return !!markerPageBounds();
+            }
             readonly property bool markerAnchorInViewport: {
                 var viewportRevision = parent ? parent.linkMarkerViewportRevision : 0;
                 var point = markerViewportPoint();
@@ -3099,7 +3165,7 @@ INSERT {
             z: 1000
             readonly property real markerGapX: Math.round(width * 0.35)
             readonly property real markerLiftY: height * 0.25
-            visible: baseMarkerVisible && (anchorSpace !== "page" || markerAnchorInViewport)
+            visible: baseMarkerVisible && (anchorSpace !== "page" || (markerPageTransformReady && markerAnchorInViewport))
             Component.onCompleted: console.log("doc-links marker delegate", "targetDocId=" + (marker ? marker.targetDocId : ""), "targetPageKey=" + (marker ? marker.targetPageKey : ""), "space=" + anchorSpace)
             onVisibleChanged: console.log("doc-links marker visible", "visible=" + visible, "x=" + x, "y=" + y, "parent=" + (!!parent ? [parent.width, parent.height].join(",") : "none"), "space=" + anchorSpace)
             onXChanged: { if (visible) console.log("doc-links marker x", x) }
@@ -3117,23 +3183,9 @@ INSERT {
                     return fallbackPoint;
                 }
 
-                var bounds = null;
-                if (parent.controller.paperNoteBounds
-                        && isFinite(parent.controller.paperNoteBounds.width)
-                        && isFinite(parent.controller.paperNoteBounds.height)
-                        && parent.controller.paperNoteBounds.width > 0
-                        && parent.controller.paperNoteBounds.height > 0) {
-                    bounds = parent.controller.paperNoteBounds;
-                } else if (parent.controller.boundingRect
-                        && isFinite(parent.controller.boundingRect.width)
-                        && isFinite(parent.controller.boundingRect.height)
-                        && parent.controller.boundingRect.width > 0
-                        && parent.controller.boundingRect.height > 0) {
-                    bounds = parent.controller.boundingRect;
-                }
-
+                var bounds = markerPageBounds();
                 if (!bounds) {
-                    return fallbackPoint;
+                    return null;
                 }
 
                 var scenePoint = Qt.point(
@@ -3142,7 +3194,7 @@ INSERT {
                 );
                 var viewPoint = parent.sceneToView(scenePoint);
                 if (!viewPoint || !isFinite(viewPoint.x) || !isFinite(viewPoint.y)) {
-                    return fallbackPoint;
+                    return null;
                 }
                 return viewPoint;
             }
