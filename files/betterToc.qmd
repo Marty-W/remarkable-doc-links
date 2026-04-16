@@ -621,6 +621,7 @@ AFFECT [[1224665461898798997]]
                                 anchorY: Number(value.anchorY !== undefined ? value.anchorY : 0),
                                 anchorW: Number(value.anchorW !== undefined ? value.anchorW : 0.05),
                                 anchorH: Number(value.anchorH !== undefined ? value.anchorH : 0.05),
+                                anchorSpace: value.anchorSpace === "page" ? "page" : "view",
                                 createdAt: value.createdAt || ""
                             };
                         });
@@ -2994,6 +2995,49 @@ INSERT {
         ~&15793094956877902211&~.tocNavigateBackFromLinkedDoc();
     }
 
+    property int linkMarkerViewportRevision: 0
+    readonly property bool hasViewportTrackedLinkMarkers: {
+        var markers = ~&15793094956877902211&~.currentPageLinkMarkers || [];
+        for (var index = 0; index < markers.length; index++) {
+            if (markers[index] && markers[index].anchorSpace === "page") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function invalidateLinkMarkerViewport() {
+        linkMarkerViewportRevision = (linkMarkerViewportRevision + 1) % 1000000;
+    }
+
+    Timer {
+        id: linkMarkerViewportPollTimer
+        interval: 50
+        repeat: true
+        running: hasViewportTrackedLinkMarkers && !~&254540341572282132&~.crossDocTocSelection
+        onTriggered: invalidateLinkMarkerViewport()
+    }
+
+    Connections {
+        target: ~&6504254477&~
+        ignoreUnknownSignals: true
+        function onWidthChanged() { invalidateLinkMarkerViewport(); }
+        function onHeightChanged() { invalidateLinkMarkerViewport(); }
+        function onContentXChanged() { invalidateLinkMarkerViewport(); }
+        function onContentYChanged() { invalidateLinkMarkerViewport(); }
+        function onVisibleAreaChanged() { invalidateLinkMarkerViewport(); }
+        function onViewportRectChanged() { invalidateLinkMarkerViewport(); }
+    }
+
+    Connections {
+        target: ~&6504254477&~ && ~&6504254477&~.controller ? ~&6504254477&~.controller : null
+        ignoreUnknownSignals: true
+        function onPaperNoteBoundsChanged() { invalidateLinkMarkerViewport(); }
+        function onBoundingRectChanged() { invalidateLinkMarkerViewport(); }
+        function onViewportRectChanged() { invalidateLinkMarkerViewport(); }
+        function onSceneRectChanged() { invalidateLinkMarkerViewport(); }
+    }
+
     Item {
         id: linkBackChip
         visible: linkBackGestureAvailable && !~&254540341572282132&~.crossDocTocSelection
@@ -3037,19 +3081,36 @@ INSERT {
         delegate: Item {
             property var marker: modelData
             property string anchorSpace: marker && marker.anchorSpace === "page" ? "page" : "view"
+            readonly property bool baseMarkerVisible: !!marker && !!marker.targetDocId && !!marker.targetPageKey && !~&254540341572282132&~.crossDocTocSelection
+            readonly property bool markerAnchorInViewport: {
+                var viewportRevision = parent ? parent.linkMarkerViewportRevision : 0;
+                var point = markerViewportPoint();
+                var minX = width * 0.35;
+                var maxX = parent ? parent.width - width * 0.65 : 0;
+                var minY = height * 0.5;
+                var maxY = parent ? parent.height - height * 0.5 : 0;
+                return !!point
+                    && isFinite(point.x)
+                    && isFinite(point.y)
+                    && (!parent || (point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY));
+            }
             width: 28
             height: 20
             z: 1000
-            visible: !!marker && !!marker.targetDocId && !!marker.targetPageKey && !~&254540341572282132&~.crossDocTocSelection
+            readonly property real markerGapX: Math.round(width * 0.35)
+            readonly property real markerLiftY: height * 0.25
+            visible: baseMarkerVisible && (anchorSpace !== "page" || markerAnchorInViewport)
             Component.onCompleted: console.log("doc-links marker delegate", "targetDocId=" + (marker ? marker.targetDocId : ""), "targetPageKey=" + (marker ? marker.targetPageKey : ""), "space=" + anchorSpace)
             onVisibleChanged: console.log("doc-links marker visible", "visible=" + visible, "x=" + x, "y=" + y, "parent=" + (!!parent ? [parent.width, parent.height].join(",") : "none"), "space=" + anchorSpace)
             onXChanged: { if (visible) console.log("doc-links marker x", x) }
             onYChanged: { if (visible) console.log("doc-links marker y", y) }
 
-            function markerViewPoint() {
+            function markerViewPoint(anchorVerticalFactor) {
+                var normalizedX = (marker && isFinite(marker.anchorX) ? marker.anchorX : 0) + (marker && isFinite(marker.anchorW) ? marker.anchorW : 0);
+                var normalizedY = (marker && isFinite(marker.anchorY) ? marker.anchorY : 0) + ((marker && isFinite(marker.anchorH) ? marker.anchorH : 0) * anchorVerticalFactor);
                 var fallbackPoint = Qt.point(
-                    ((marker && isFinite(marker.anchorX) ? marker.anchorX : 0) + (marker && isFinite(marker.anchorW) ? marker.anchorW : 0)) * (parent ? parent.width : 0),
-                    (marker && isFinite(marker.anchorY) ? marker.anchorY : 0) * (parent ? parent.height : 0)
+                    normalizedX * (parent ? parent.width : 0),
+                    normalizedY * (parent ? parent.height : 0)
                 );
 
                 if (anchorSpace !== "page" || !parent || !parent.controller || !parent.sceneToView) {
@@ -3076,8 +3137,8 @@ INSERT {
                 }
 
                 var scenePoint = Qt.point(
-                    bounds.x + (((marker && isFinite(marker.anchorX) ? marker.anchorX : 0) + (marker && isFinite(marker.anchorW) ? marker.anchorW : 0)) * bounds.width),
-                    bounds.y + ((marker && isFinite(marker.anchorY) ? marker.anchorY : 0) * bounds.height)
+                    bounds.x + (normalizedX * bounds.width),
+                    bounds.y + (normalizedY * bounds.height)
                 );
                 var viewPoint = parent.sceneToView(scenePoint);
                 if (!viewPoint || !isFinite(viewPoint.x) || !isFinite(viewPoint.y)) {
@@ -3086,14 +3147,24 @@ INSERT {
                 return viewPoint;
             }
 
+            function markerPlacementPoint() {
+                return markerViewPoint(0.0);
+            }
+
+            function markerViewportPoint() {
+                return markerViewPoint(0.5);
+            }
+
             x: {
-                var point = markerViewPoint();
-                var targetX = (point && isFinite(point.x) ? point.x : 0) - width * 0.35;
+                var viewportRevision = parent ? parent.linkMarkerViewportRevision : 0;
+                var point = markerPlacementPoint();
+                var targetX = (point && isFinite(point.x) ? point.x : 0) + markerGapX;
                 return Math.max(0, Math.min(parent ? parent.width - width : 0, targetX));
             }
             y: {
-                var point = markerViewPoint();
-                var targetY = (point && isFinite(point.y) ? point.y : 0) - height * 0.35;
+                var viewportRevision = parent ? parent.linkMarkerViewportRevision : 0;
+                var point = markerPlacementPoint();
+                var targetY = (point && isFinite(point.y) ? point.y : 0) - markerLiftY;
                 return Math.max(0, Math.min(parent ? parent.height - height : 0, targetY));
             }
 
