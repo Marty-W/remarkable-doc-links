@@ -162,7 +162,6 @@ AFFECT [[1224665461898798997]]
             property bool _linkApplyingLoad: false
             property int _linkMutationSerial: 0
             property var currentPageLinkMarkers: []
-            property string tocSidebarMode: "toc"
             property bool _creatingLinkedNotebook: false
             property var _pendingLinkedNotebookCreate: null
             readonly property string lastDocPreviousDocId: Values.martinLastDocSettings.previousDocId || ""
@@ -176,25 +175,8 @@ AFFECT [[1224665461898798997]]
                 onTriggered: linkedNotePollPendingCreate()
             }
 
-            function tocSetSidebarMessage(messageText, onClick) {
-                ~&6504254477&~.~&16299287846731412336&~ = messageText ? {
-                    ~&233736549263054&~: messageText,
-                    onMessageClicked: onClick
-                } : ~&6504117156&~;
-            }
-
-            function tocRefreshSidebarMessage() {
-                if (tocSidebarMode === "links") {
-                    tocSetSidebarMessage(~&6504222003&~("Table of Contents"), function () {
-                        tocShowView();
-                    });
-                } else if (activeLinkBackDepth > 0 || Object.keys(linkEntries).length > 0) {
-                    tocSetSidebarMessage(~&6504222003&~("Links"), function () {
-                        tocShowLinksView();
-                    });
-                } else {
-                    tocSetSidebarMessage("", ~&6504117156&~);
-                }
+            function tocRefreshSidebarModel() {
+                tocBuildModel();
             }
 
             function linkedNoteMetadataPath(docId) {
@@ -402,175 +384,6 @@ AFFECT [[1224665461898798997]]
                     LibraryController.setLastOpenedPage(document, currentPage);
                 }
                 navigator.explorer.open(recentDocumentId);
-            }
-
-            function linkEntrySourcePage(entry) {
-                if (!entry)
-                    return -1;
-
-                var storedPage = Number(entry.sourcePage);
-                if (isFinite(storedPage) && storedPage >= 0) {
-                    return storedPage;
-                }
-
-                if (document && entry.sourcePageId) {
-                    return document.pageForId(entry.sourcePageId);
-                }
-
-                return -1;
-            }
-
-            function linkEntryTitle(entry) {
-                if (!entry)
-                    return ~&6504222003&~("Document link");
-
-                var xrefEntry = entry.xrefKey ? (tocEntries[entry.xrefKey] || {}) : ({});
-                return xrefEntry.~&6504095402&~ || entry.targetDocName || ~&6504222003&~("Document link");
-            }
-
-            function linkEntryStatus(entry) {
-                if (!entry)
-                    return ~&"254522926132630058&~;
-
-                var xrefEntry = entry.xrefKey ? (tocEntries[entry.xrefKey] || {}) : ({});
-                if (xrefEntry.pageDeleted) {
-                    return "page_deleted";
-                }
-
-                var targetEntry = ~&233694067165438&~.~&8399431778896295215&~(entry.targetDocId);
-                if (!targetEntry) {
-                    return "deleted";
-                }
-                if (targetEntry.~&7712810854541167&~) {
-                    return ~&"7712810854541167&~;
-                }
-                return ~&"254522926132630058&~;
-            }
-
-            function linkBuildSidebarModel() {
-                var model = [];
-                var currentLinks = [];
-                var allLinks = [];
-                var currentLinkPageId = currentPageId || (document ? document.idForPage(currentPage) : "");
-
-                if (activeLinkBackTarget) {
-                    var backTarget = activeLinkBackTarget;
-                    var backLabel = ~&6504222003&~("← Back to %1").~&197080195&~(
-                        backTarget.docName || ~&6504222003&~("previous page"));
-                    if (activeLinkBackDepth > 1) {
-                        backLabel += " · " + activeLinkBackDepth;
-                    }
-                    model.push({
-                        entryKind: "link_back",
-                        ~&7083037950451&~: "link-back",
-                        ~&6504095402&~: backLabel,
-                        ~&6504167078&~: -1,
-                        isUserEntry: ~&214625660372&~,
-                        isCrossDoc: ~&214625660372&~
-                    });
-                }
-
-                if (lastDocAvailable) {
-                    model.push(lastDocBuildSidebarEntry());
-                }
-
-                Object.keys(linkEntries).forEach(function (key) {
-                    var entry = linkEntries[key] || {};
-                    var sourcePage = linkEntrySourcePage(entry);
-                    var title = linkEntryTitle(entry);
-                    var status = linkEntryStatus(entry);
-                    var sidebarEntry = {
-                        entryKind: "link",
-                        ~&7083037950451&~: entry.xrefKey || key,
-                        ~&6504095402&~: title,
-                        ~&6504167078&~: sourcePage,
-                        ~&214632930081&~: 0,
-                        isUserEntry: ~&214625660372&~,
-                        isCrossDoc: ~&6504329801&~,
-                        crossDocStatus: status,
-                        targetDocId: entry.targetDocId || "",
-                        targetPageKey: entry.targetPageKey || "",
-                        targetDocName: entry.targetDocName || "",
-                        xrefKey: entry.xrefKey || ""
-                    };
-
-                    allLinks.push(sidebarEntry);
-                    if (currentLinkPageId && entry.sourcePageId === currentLinkPageId) {
-                        currentLinks.push(sidebarEntry);
-                    }
-                });
-
-                var linkSorter = function (left, right) {
-                    var leftPage = Number(left.~&6504167078&~);
-                    var rightPage = Number(right.~&6504167078&~);
-                    if (isFinite(leftPage) && isFinite(rightPage) && leftPage !== rightPage) {
-                        return leftPage - rightPage;
-                    }
-                    return String(left.~&6504095402&~ || "").localeCompare(String(right.~&6504095402&~ || ""));
-                };
-
-                currentLinks.sort(linkSorter);
-                allLinks.sort(linkSorter);
-
-                if (currentLinks.length > 0) {
-                    model.push({
-                        entryKind: "link_section",
-                        ~&7083037950451&~: "link-section-current",
-                        ~&6504095402&~: ~&6504222003&~("Current page"),
-                        ~&6504167078&~: -1,
-                        isUserEntry: ~&214625660372&~,
-                        isCrossDoc: ~&214625660372&~
-                    });
-                    currentLinks.forEach(function (entry) {
-                        model.push(entry);
-                    });
-                }
-
-                if (allLinks.length > 0) {
-                    model.push({
-                        entryKind: "link_section",
-                        ~&7083037950451&~: "link-section-all",
-                        ~&6504095402&~: ~&6504222003&~("All document links"),
-                        ~&6504167078&~: -1,
-                        isUserEntry: ~&214625660372&~,
-                        isCrossDoc: ~&214625660372&~
-                    });
-                    allLinks.forEach(function (entry) {
-                        var sourcePage = Number(entry.~&6504167078&~);
-                        var pageLabel = isFinite(sourcePage) && sourcePage >= 0
-                            ? ~&6504222003&~("Page %1").~&197080195&~(sourcePage + 1)
-                            : ~&6504222003&~("Unknown page");
-                        model.push({
-                            entryKind: "link",
-                            ~&7083037950451&~: entry.~&7083037950451&~,
-                            ~&6504095402&~: pageLabel + " · " + (entry.~&6504095402&~ || ~&6504222003&~("Document link")),
-                            ~&6504167078&~: entry.~&6504167078&~,
-                            ~&214632930081&~: 0,
-                            isUserEntry: ~&214625660372&~,
-                            isCrossDoc: ~&6504329801&~,
-                            crossDocStatus: entry.crossDocStatus,
-                            targetDocId: entry.targetDocId,
-                            targetPageKey: entry.targetPageKey,
-                            targetDocName: entry.targetDocName,
-                            xrefKey: entry.xrefKey || ""
-                        });
-                    });
-                }
-
-                if (model.length === 0) {
-                    model.push({
-                        entryKind: "link_empty",
-                        ~&7083037950451&~: "link-empty",
-                        ~&6504095402&~: ~&6504222003&~("No document links yet"),
-                        ~&6504167078&~: -1,
-                        isUserEntry: ~&214625660372&~,
-                        isCrossDoc: ~&214625660372&~
-                    });
-                }
-
-                _tocModelRebuilding = ~&6504329801&~;
-                ~&6504254477&~.~&7713616698729984&~ = model;
-                ~&5971598&~.~&254524858248187773&~(() => { _tocModelRebuilding = ~&214625660372&~; });
             }
 
             function linkLoadEntries() {
@@ -820,24 +633,10 @@ AFFECT [[1224665461898798997]]
                     linkSaveEntries();
                 }
                 linkRefreshCurrentPageMarkers();
-                if (tocSidebarMode === "links") {
-                    linkBuildSidebarModel();
-                }
-                tocRefreshSidebarMessage();
-            }
-
-            onActiveLinkBackStackChanged: {
-                if (tocSidebarMode === "links") {
-                    linkBuildSidebarModel();
-                }
-                tocRefreshSidebarMessage();
             }
 
             onCurrentPageIdChanged: {
                 linkRefreshCurrentPageMarkers();
-                if (tocSidebarMode === "links") {
-                    linkBuildSidebarModel();
-                }
             }
             onCurrentPageLinkMarkersChanged: console.log("doc-links markers changed", "count=" + currentPageLinkMarkers.length)
 
@@ -847,7 +646,7 @@ AFFECT [[1224665461898798997]]
                     _tocLoadingDocId = "";
                     tocLoading = ~&214625660372&~;
                     tocEntries = ({});
-                    tocBuildModel();
+                    tocRefreshSidebarModel();
                     ~&7083121450889&~;
                 }
 
@@ -911,7 +710,7 @@ AFFECT [[1224665461898798997]]
                         _pendingPageDeletedXref = "";
                         tocLoading = ~&214625660372&~;
                         tocSaveEntries();
-                        tocBuildModel();
+                        tocRefreshSidebarModel();
 
                         ~&5971598&~.~&254524858248187773&~(() => {
                             _tocCrossDocErrorLoader.xrefKey = xrefKey;
@@ -924,7 +723,7 @@ AFFECT [[1224665461898798997]]
                     }
 
                     tocLoading = ~&214625660372&~;
-                    tocBuildModel();
+                    tocRefreshSidebarModel();
                     tocTryShowPendingCrossDoc();
                 });
             }
@@ -1464,24 +1263,7 @@ AFFECT [[1224665461898798997]]
             }
 
             function tocShowView() {
-                tocSidebarMode = "toc";
                 tocBuildModel();
-                tocRefreshSidebarMessage();
-                ~&5972376&~ (~&254547437090201330&~ && ~&254547437090201330&~.~&502817364213021138&~) {
-                    _savedTocScrollPosition = {
-                        ~&7082534202858&~: ~&5971598&~.~&214638019283&~(~&254547437090201330&~.~&502817364213021138&~.~&7082534202858&~.~&180993&~, ~&254547437090201330&~.~&502817364213021138&~.~&7082534202858&~.~&180994&~),
-                        ~&214641137009&~: ~&254547437090201330&~.~&502817364213021138&~.~&214641137009&~
-                    };
-                }
-                ~&214637513689&~.tocFromToolbar = ~&6504329801&~;
-                ~&214637513689&~.~&233748328658231&~ = ~&6504329801&~;
-                ~&214637513689&~.tocShowView(~&6504329801&~);
-            }
-
-            function tocShowLinksView() {
-                tocSidebarMode = "links";
-                linkBuildSidebarModel();
-                tocRefreshSidebarMessage();
                 ~&5972376&~ (~&254547437090201330&~ && ~&254547437090201330&~.~&502817364213021138&~) {
                     _savedTocScrollPosition = {
                         ~&7082534202858&~: ~&5971598&~.~&214638019283&~(~&254547437090201330&~.~&502817364213021138&~.~&7082534202858&~.~&180993&~, ~&254547437090201330&~.~&502817364213021138&~.~&7082534202858&~.~&180994&~),
@@ -1711,12 +1493,7 @@ AFFECT [[1224665461898798997]]
 
             onTocEntriesChanged: {
                 tocSaveEntries();
-                if (tocSidebarMode === "links") {
-                    linkBuildSidebarModel();
-                } else {
-                    tocBuildModel();
-                }
-                tocRefreshSidebarMessage();
+                tocBuildModel();
                 ~&5972376&~ (_closeAfterCrossDocSave) {
                     _closeAfterCrossDocSave = ~&214625660372&~;
                     tocCloseView();
@@ -1728,7 +1505,6 @@ AFFECT [[1224665461898798997]]
             TRAVERSE [[233704648923420]]
                 LOCATE BEFORE ALL INSERT {
                     onTocShowView: ~&15793094956877902211&~.tocShowView()
-                    onTocShowLinksView: ~&15793094956877902211&~.tocShowLinksView()
                     onTocAddEntry: (~&7083037950451&~) => {
                         ~&15793094956877902211&~.tocShowRenameDialog(~&7083037950451&~);
                     }
@@ -1851,7 +1627,7 @@ AFFECT [[1224665461898798997]]
                     ~&5972376&~ (~&7712934851008712&~ && ~&7712934851008712&~.~&7713012671454059&~ === ~&7711571060833448&~.~&7711997891205770&~) ~&7083121450889&~;
                     ~&15793094956877902211&~._nativeTocModel = ~&233743006687195&~ || [];
                     ~&15793094956877902211&~._nativeTocLoaded = ~&6504329801&~;
-                    ~&15793094956877902211&~.tocBuildModel();
+                    ~&15793094956877902211&~.tocRefreshSidebarModel();
                     ~&15793094956877902211&~.tocTryShowPendingCrossDoc();
                 }
             }
@@ -2700,7 +2476,6 @@ AFFECT [[11313888899523275277]]
         LOCATE BEFORE ALL
         INSERT {
             signal tocShowView()
-            signal tocShowLinksView()
             signal tocAddEntry(~&7083178290016&~ ~&7083037950451&~)
             signal tocAddCurrentEntry()
             signal tocStartCrossDocSelection()
@@ -2750,16 +2525,6 @@ AFFECT [[11313888899523275277]]
                         }
 
                         ~&425121728314878811&~.~&432643201877711221&~ {
-                            ~&214632764553&~: ~&6504222003&~("Show Links")
-                            ~&8399601734642709923&~: ~&"15094524446771853950&~
-                            ~&233748328658231&~: !!~&7712934851008712&~
-                            ~&254542236275632405&~: {
-                                ~&6504254477&~.~&15738511857451076348&~();
-                                ~&6504254477&~.tocShowLinksView();
-                            }
-                        }
-
-                        ~&425121728314878811&~.~&432643201877711221&~ {
                             ~&214632764553&~: ~&6504222003&~("Show Table of Contents")
                             ~&8399601734642709923&~: ~&"15094524446771854124&~
                             ~&233748328658231&~: ~&15793094956877902211&~.~&7713616698729984&~.~&7082886407723&~ > 0
@@ -2768,6 +2533,7 @@ AFFECT [[11313888899523275277]]
                                 ~&6504254477&~.tocShowView();
                             }
                         }
+
                     }
                 }
             }
@@ -2799,18 +2565,6 @@ AFFECT [[11704595946725378272]]
                 ~&254542236275632405&~: {
                     ~&6504254477&~.~&233745975898428&~.~&15738511857451076348&~();
                     ~&6504254477&~.~&233745975898428&~.tocStartCrossDocSelection();
-                }
-            }
-
-            ~&425121728314878811&~.~&432643201877711221&~ {
-                ~&214632764553&~: ~&6504222003&~("Show Links")
-                ~&8399601734642709923&~: ~&"15094524446771853950&~
-                ~&233748328658231&~: !!~&6504254477&~.~&233745975898428&~.~&7712934851008712&~ &&
-                         ~&6504254477&~.~&233745975898428&~.~&4367731859579753176&~ <= 7 &&
-                         ~&6504254477&~.~&233745975898428&~.~&14953652214069020552&~.~&14593461789319363686&~
-                ~&254542236275632405&~: {
-                    ~&6504254477&~.~&233745975898428&~.~&15738511857451076348&~();
-                    ~&6504254477&~.~&233745975898428&~.tocShowLinksView();
                 }
             }
 
@@ -2870,18 +2624,6 @@ AFFECT [[6025599999262907645]]
                 }
 
                 ~&425121728314878811&~.~&432643201877711221&~ {
-                    ~&214632764553&~: ~&6504222003&~("Show Links")
-                    ~&8399601734642709923&~: ~&"15094524446771853950&~
-                    ~&233748328658231&~: !!~&6504254477&~.~&233745975898428&~.~&7712934851008712&~ &&
-                             ~&6504254477&~.~&233745975898428&~.~&4367731859579753176&~ <= 7 &&
-                             !~&6504254477&~.~&233745975898428&~.~&14953652214069020552&~.~&14593461789319363686&~
-                    ~&254542236275632405&~: {
-                        ~&6504254477&~.~&233745975898428&~.~&15738511857451076348&~();
-                        ~&6504254477&~.~&233745975898428&~.tocShowLinksView();
-                    }
-                }
-
-                ~&425121728314878811&~.~&432643201877711221&~ {
                     ~&214632764553&~: ~&6504222003&~("Show Table of Contents")
                     ~&8399601734642709923&~: ~&"15094524446771854124&~
                     ~&233748328658231&~: ~&15793094956877902211&~.~&7713616698729984&~.~&7082886407723&~ > 0 &&
@@ -2892,6 +2634,7 @@ AFFECT [[6025599999262907645]]
                         ~&6504254477&~.~&233745975898428&~.tocShowView();
                     }
                 }
+
             }
         END TRAVERSE
     END TRAVERSE

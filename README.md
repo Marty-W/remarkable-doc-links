@@ -9,7 +9,10 @@ Experimental internal links for reMarkable notebooks via XOVI/QMD.
 - persist source-page link markers in a dedicated `links.rm` sidecar
 - tap a marker to open the linked document/page
 - keep a transient **back stack** for linked-document navigation
-- expose links in a sidebar **Links** view
+- keep **Better ToC** as the primary toolbar entry, with working actions for:
+  - **Add ToC entry**
+  - **Link to another document**
+  - **Show Table of Contents**
 
 ## Current scope
 
@@ -21,7 +24,10 @@ What is currently supported well:
 - cross-document picking
 - create linked note directly from a selection
 - back navigation after following links
-- sidebar browsing of document links
+- the current Better ToC actions:
+  - **Add ToC entry**
+  - **Link to another document**
+  - **Show Table of Contents**
 
 What is still limited:
 
@@ -29,6 +35,7 @@ What is still limited:
 - back stack is session state, not persisted across xochitl restarts
 - older links created before the page-space marker fix may render slightly off
 - the create-linked-note path may briefly flash a modal on some setups, but should dismiss immediately
+- a separate links-browsing surface is intentionally deferred for this release until the UX is clearer
 
 ## Compatibility
 
@@ -41,6 +48,8 @@ Tested primarily on:
 This repo includes a **tablet-side native plugin**. The bundled prebuilt binary is currently for **Paper Pro / aarch64**.
 
 For **Create linked note**, the QMD flow now prefers [`rm-librarian`](https://github.com/rmitchellscott/rm-librarian) when that XOVI extension is present, and falls back to the bundled native plugin otherwise. That opens the door to broader device coverage where `rm-librarian` already has builds.
+
+This repo's installer does **not** currently install `rm-librarian` for you; it remains an optional companion extension.
 
 ## Important dependency / conflict note
 
@@ -70,6 +79,17 @@ Backups are stored on the tablet under:
 - `/home/root/.local/share/remarkable-doc-links/backups/<timestamp>/`
 
 If a tablet already has the older legacy plugin name `desktop-clipboard-native.so`, the installer backs it up and removes that duplicate copy during install.
+
+## Optional: install rm-librarian
+
+If you want the **preferred** linked-note backend instead of only the bundled native fallback:
+
+1. Download `librarian-aarch64.so` from the latest [`rm-librarian` release](https://github.com/rmitchellscott/rm-librarian/releases/latest)
+2. Copy it to:
+   - `/home/root/xovi/extensions.d/librarian-aarch64.so`
+3. Restart XOVI / xochitl
+
+Once installed, **Create linked note** in this package will prefer `rm-librarian` automatically.
 
 ## Install
 
