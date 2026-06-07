@@ -508,6 +508,103 @@ AFFECT [[1224665461898798997]]
                 };
             }
 
+            function linkAnchorDistance(a, b) {
+                if (!a || !b) {
+                    return 999;
+                }
+                var ax = Number(a.x !== undefined ? a.x : a.anchorX);
+                var ay = Number(a.y !== undefined ? a.y : a.anchorY);
+                var aw = Number(a.w !== undefined ? a.w : a.anchorW);
+                var ah = Number(a.h !== undefined ? a.h : a.anchorH);
+                var bx = Number(b.x !== undefined ? b.x : b.anchorX);
+                var by = Number(b.y !== undefined ? b.y : b.anchorY);
+                var bw = Number(b.w !== undefined ? b.w : b.anchorW);
+                var bh = Number(b.h !== undefined ? b.h : b.anchorH);
+                if (!isFinite(ax) || !isFinite(ay) || !isFinite(aw) || !isFinite(ah)
+                        || !isFinite(bx) || !isFinite(by) || !isFinite(bw) || !isFinite(bh)) {
+                    return 999;
+                }
+                var acx = ax + aw / 2;
+                var acy = ay + ah / 2;
+                var bcx = bx + bw / 2;
+                var bcy = by + bh / 2;
+                return Math.sqrt(Math.pow(acx - bcx, 2) + Math.pow(acy - bcy, 2))
+                    + Math.abs(aw - bw) * 0.5
+                    + Math.abs(ah - bh) * 0.5;
+            }
+
+            function linkUpdateMovedSelectionAnchor(previousAnchor, nextAnchor) {
+                if (!document || linkLoading) {
+                    return false;
+                }
+
+                var oldAnchor = linkNormalizeAnchor(previousAnchor);
+                var newAnchor = linkNormalizeAnchor(nextAnchor);
+                if (!oldAnchor || !newAnchor || oldAnchor.space !== newAnchor.space) {
+                    return false;
+                }
+
+                var movedDistance = linkAnchorDistance(oldAnchor, newAnchor);
+                if (movedDistance < 0.012) {
+                    return false;
+                }
+
+                var pageId = currentPageId || (document ? document.idForPage(currentPage) : "");
+                if (!pageId) {
+                    return false;
+                }
+
+                var bestKey = "";
+                var bestScore = 999;
+                var secondScore = 999;
+                Object.keys(linkEntries).forEach(function (key) {
+                    var entry = linkEntries[key] || {};
+                    if (entry.sourcePageId !== pageId) {
+                        return;
+                    }
+                    if ((entry.anchorSpace || "view").toString() !== oldAnchor.space) {
+                        return;
+                    }
+                    var score = linkAnchorDistance({
+                        x: entry.anchorX,
+                        y: entry.anchorY,
+                        w: entry.anchorW,
+                        h: entry.anchorH
+                    }, oldAnchor);
+                    if (score < bestScore) {
+                        secondScore = bestScore;
+                        bestScore = score;
+                        bestKey = key;
+                    } else if (score < secondScore) {
+                        secondScore = score;
+                    }
+                });
+
+                if (!bestKey || bestScore > 0.04 || (secondScore < 999 && secondScore - bestScore < 0.01)) {
+                    console.log("doc-links move-anchor skipped",
+                        "reason=no-unique-match",
+                        "best=" + bestScore,
+                        "second=" + secondScore,
+                        "moved=" + movedDistance);
+                    return false;
+                }
+
+                _linkMutationSerial++;
+                linkEntries[bestKey].anchorX = newAnchor.x;
+                linkEntries[bestKey].anchorY = newAnchor.y;
+                linkEntries[bestKey].anchorW = newAnchor.w;
+                linkEntries[bestKey].anchorH = newAnchor.h;
+                linkEntries[bestKey].anchorSpace = newAnchor.space || "view";
+                console.log("doc-links move-anchor updated",
+                    "key=" + bestKey,
+                    "pageId=" + pageId,
+                    "old=" + [oldAnchor.x, oldAnchor.y, oldAnchor.w, oldAnchor.h].join(","),
+                    "new=" + [newAnchor.x, newAnchor.y, newAnchor.w, newAnchor.h].join(","),
+                    "score=" + bestScore);
+                linkEntriesChanged();
+                return true;
+            }
+
             function linkAddEntryFromPending(pendingEntry, xrefKey) {
                 if (!pendingEntry || !pendingEntry.sourceAnchor || !pendingEntry.sourcePageId) {
                     console.log("doc-links addEntry skipped",

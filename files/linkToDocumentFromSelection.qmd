@@ -42,6 +42,109 @@ AFFECT [[11806562588218124596]]
 TRAVERSE ?#[[18399528329672988301]]
 LOCATE AFTER ALL
 INSERT {
+property var docLinksMovePreviousAnchor: null
+property string docLinksMovePreviousSignature: ""
+property int docLinksMoveQuietTicks: 0
+
+function docLinksSelectionAnchorFromBounds() {
+	var selectionItems = null;
+	var selectionBounds = null;
+	try {
+		selectionItems = ~&8399340108982949229&~.~&5308518110917893541&~(~&8399340108982949229&~.~&15752433948179392809&~, ~&6504254477&~.~&15777890623490054006&~);
+		if (~&8399340108982949229&~["getItemBoundingRect"]) {
+			selectionBounds = ~&8399340108982949229&~["getItemBoundingRect"](selectionItems);
+		}
+	} catch (error) {
+		return null;
+	}
+	return selectionAnchorFromBounds(selectionBounds);
+}
+
+function selectionAnchorFromBounds(selectionBounds) {
+	var pageBounds = null;
+	var sceneController = ~&6504254477&~.controller || null;
+	if (sceneController && sceneController.paperNoteBounds
+			&& isFinite(sceneController.paperNoteBounds.width)
+			&& isFinite(sceneController.paperNoteBounds.height)
+			&& sceneController.paperNoteBounds.width > 0
+			&& sceneController.paperNoteBounds.height > 0) {
+		pageBounds = sceneController.paperNoteBounds;
+	} else if (sceneController && sceneController.boundingRect
+			&& isFinite(sceneController.boundingRect.width)
+			&& isFinite(sceneController.boundingRect.height)
+			&& sceneController.boundingRect.width > 0
+			&& sceneController.boundingRect.height > 0) {
+		pageBounds = sceneController.boundingRect;
+	}
+
+	var sourceAnchor = null;
+	if (selectionBounds && pageBounds) {
+		sourceAnchor = {
+			x: (Number(selectionBounds.x) - Number(pageBounds.x)) / Number(pageBounds.width),
+			y: (Number(selectionBounds.y) - Number(pageBounds.y)) / Number(pageBounds.height),
+			w: Number(selectionBounds.width) / Number(pageBounds.width),
+			h: Number(selectionBounds.height) / Number(pageBounds.height),
+			space: "page"
+		};
+	} else if (selectionBounds && ~&6504254477&~.width > 0 && ~&6504254477&~.height > 0) {
+		sourceAnchor = {
+			x: Math.max(0, Math.min(1, Number(selectionBounds.x) / ~&6504254477&~.width)),
+			y: Math.max(0, Math.min(1, Number(selectionBounds.y) / ~&6504254477&~.height)),
+			w: Math.max(0.02, Math.min(1, Number(selectionBounds.width) / ~&6504254477&~.width)),
+			h: Math.max(0.02, Math.min(1, Number(selectionBounds.height) / ~&6504254477&~.height)),
+			space: "view"
+		};
+	}
+	return sourceAnchor;
+}
+
+function docLinksAnchorSignature(anchor) {
+	if (!anchor) return "";
+	return [anchor.space, anchor.x.toFixed(5), anchor.y.toFixed(5), anchor.w.toFixed(5), anchor.h.toFixed(5)].join("|");
+}
+
+function docLinksMoveTrackSelection() {
+	var anchor = docLinksSelectionAnchorFromBounds();
+	if (!anchor) {
+		docLinksMoveQuietTicks++;
+		if (docLinksMoveQuietTicks > 2) {
+			docLinksMovePreviousAnchor = null;
+			docLinksMovePreviousSignature = "";
+		}
+		return;
+	}
+
+	docLinksMoveQuietTicks = 0;
+	var signature = docLinksAnchorSignature(anchor);
+	if (!docLinksMovePreviousAnchor || !docLinksMovePreviousSignature) {
+		docLinksMovePreviousAnchor = anchor;
+		docLinksMovePreviousSignature = signature;
+		return;
+	}
+	if (signature === docLinksMovePreviousSignature) {
+		return;
+	}
+
+	var updated = false;
+	try {
+		updated = ~&15793094956877902211&~.linkUpdateMovedSelectionAnchor(docLinksMovePreviousAnchor, anchor);
+	} catch (error) {
+		console.log("doc-links move-anchor error", String(error));
+	}
+	docLinksMovePreviousAnchor = anchor;
+	docLinksMovePreviousSignature = signature;
+	if (updated) {
+		console.log("doc-links move-anchor tracked", signature);
+	}
+}
+
+Timer {
+	interval: 350
+	repeat: true
+	running: true
+	onTriggered: docLinksMoveTrackSelection()
+}
+
 function selectionSourceAnchor() {
 	var selectionItems = ~&8399340108982949229&~.~&5308518110917893541&~(~&8399340108982949229&~.~&15752433948179392809&~, ~&6504254477&~.~&15777890623490054006&~);
 	var selectionBounds = null;
@@ -92,6 +195,10 @@ function selectionSourceAnchor() {
 		"anchorSpace=" + (sourceAnchor ? sourceAnchor.space : "null"),
 		"anchor=" + (sourceAnchor ? [sourceAnchor.x, sourceAnchor.y, sourceAnchor.w, sourceAnchor.h].join(",") : "null"));
 
+	if (sourceAnchor) {
+		docLinksMovePreviousAnchor = sourceAnchor;
+		docLinksMovePreviousSignature = docLinksAnchorSignature(sourceAnchor);
+	}
 	return sourceAnchor;
 }
 

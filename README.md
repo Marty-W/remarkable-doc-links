@@ -7,6 +7,7 @@ Experimental internal links for reMarkable notebooks via XOVI/QMD.
 - add **Link to document** to the notebook selection / lasso popout
 - add **Create linked note** to the same selection flow
 - persist source-page link markers in a dedicated `links.rm` sidecar
+- keep source-page link markers aligned when their selected handwritten/lasso content is moved
 - tap a marker to open the linked document/page
 - keep a transient **back stack** for linked-document navigation
 - keep **Better ToC** as the primary toolbar entry, with working actions for:
@@ -24,6 +25,7 @@ What is currently supported well:
 - cross-document picking
 - create linked note directly from a selection
 - back navigation after following links
+- marker repositioning when linked selection-tool/lasso content is moved
 - the current Better ToC actions:
   - **Add ToC entry**
   - **Link to another document**
@@ -34,6 +36,7 @@ What is still limited:
 - glyph/text-selection links still use the simpler phase-1 cross-document flow
 - back stack is session state, not persisted across xochitl restarts
 - older links created before the page-space marker fix may render slightly off
+- marker repositioning is bounds-based; if multiple links have overlapping/near-identical anchors, the update is skipped rather than guessed
 - the create-linked-note path may briefly flash a modal on some setups, but should dismiss immediately
 - a separate links-browsing surface is intentionally deferred for this release until the UX is clearer
 
